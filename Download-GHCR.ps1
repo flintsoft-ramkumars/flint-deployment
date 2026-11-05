@@ -46,6 +46,63 @@ $manifestTypes = @(
     "application/vnd.docker.distribution.manifest.v2+json"
 ) -join ","
 
+function Get-RedirectHost([string]$Url, [hashtable]$Headers) {
+    # Returns the host a URL redirects to, or $null if it does not redirect or cannot be reached.
+    $response = $null
+    try {
+        $request = [Net.HttpWebRequest][Net.WebRequest]::Create($Url)
+        $request.AllowAutoRedirect = $false
+        $request.Timeout = 15000
+        if ($Headers.Authorization) { $request.Headers["Authorization"] = $Headers.Authorization }
+        $response = $request.GetResponse()
+    }
+    catch [Net.WebException] {
+        $response = $_.Exception.Response
+    }
+    catch {
+        return $null
+    }
+
+    if (-not $response) { return $null }
+    try {
+        $location = $response.Headers["Location"]
+        if ($location) { return ([Uri]::new([Uri]$Url, $location)).Host }
+        return $null
+    }
+    finally {
+        $response.Close()
+    }
+}
+
+function Invoke-RegistryRequest {
+    # Runs a web request and reports exactly which server failed.
+    param([string]$Url, [hashtable]$Headers = @{}, [string]$OutFile)
+
+    try {
+        if ($OutFile) {
+            Invoke-WebRequest -Uri $Url -Headers $Headers -OutFile $OutFile -UseBasicParsing
+        }
+        else {
+            Invoke-RestMethod -Uri $Url -Headers $Headers -UseBasicParsing
+        }
+    }
+    catch {
+        $reason = $_.Exception.Message
+        $serverHost = ([Uri]$Url).Host
+        $address = $Url -replace '\?.*$', ''
+
+        if ($_.Exception.Response) {
+            throw "Server $serverHost returned an error for ${address}: $reason"
+        }
+
+        $redirectHost = Get-RedirectHost $Url $Headers
+        if ($redirectHost -and $redirectHost -ne $serverHost) {
+            throw "Cannot connect to remote server $redirectHost ($serverHost redirected ${address} there): $reason"
+        }
+        throw "Cannot connect to remote server $serverHost (requesting ${address}): $reason"
+    }
+}
+
 function Get-AuthHeader([string]$Repository) {
     $url = "https://$registry/token?service=$registry&scope=repository:${Repository}:pull"
     $headers = @{}
@@ -58,7 +115,7 @@ function Get-AuthHeader([string]$Repository) {
         $headers.Authorization = "Basic " + [Convert]::ToBase64String($pair)
     }
 
-    $response = Invoke-RestMethod -Uri $url -Headers $headers -UseBasicParsing
+    $response = Invoke-RegistryRequest -Url $url -Headers $headers
     return @{ Authorization = "Bearer $($response.token)" }
 }
 
@@ -77,7 +134,7 @@ function Save-VerifiedBlob {
 
     $tempFile = Join-Path $BlobDir ([IO.Path]::GetRandomFileName())
     try {
-        Invoke-WebRequest -Uri $Url -Headers $headers -OutFile $tempFile -UseBasicParsing
+        Invoke-RegistryRequest -Url $Url -Headers $headers -OutFile $tempFile
         $hash = (Get-FileHash -LiteralPath $tempFile -Algorithm SHA256).Hash.ToLowerInvariant()
         $digest = "sha256:$hash"
 
