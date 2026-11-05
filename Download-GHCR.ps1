@@ -2,7 +2,7 @@ function Download-GHCRImage {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [string]$ImageName,   # Example: "linuxserver/nginx" or "open-webui/open-webui"
+        [string]$ImageName,
 
         [Parameter(Mandatory = $false)]
         [string]$Tag = "latest"
@@ -62,7 +62,11 @@ function Download-GHCRImage {
 
     foreach ($Layer in $Layers) {
         $Digest = $Layer.digest
-        $CleanFileName = "$($Digest.Replace('sha256:', '')).tar.gz"
+        
+        # FIXED: Removed the inline string interpolation to stop the parser error
+        $RawHash = $Digest.Replace('sha256:', '')
+        $CleanFileName = $RawHash + ".tar.gz"
+        
         $TargetFile = Join-Path $OutputPath $CleanFileName
         $ManifestLayersJson += $CleanFileName
 
