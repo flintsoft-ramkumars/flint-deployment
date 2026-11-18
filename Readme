@@ -38,3 +38,15 @@ openssl req -x509 -nodes -newkey rsa:2048 -days 30 \
   -keyout certs/server.key -out certs/server.crt \
   -subj "/CN=localhost" \
   -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+
+services:
+  nginx:
+    image: ghcr.io/<org>/nginx:1.28-alpine
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "10443:443"
+    volumes:
+      - ./conf.d:/etc/nginx/conf.d:ro
+      - ./certs:/etc/nginx/certs:ro
+      - ./html:/usr/share/nginx/html:ro
