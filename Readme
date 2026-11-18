@@ -16,3 +16,25 @@ sudo apt-get install -y \
   docker-ce docker-ce-cli containerd.io \
   docker-buildx-plugin docker-compose-plugin \
   docker-ce-rootless-extras uidmap slirp4netns dbus-user-session iptables
+
+
+  server {
+    listen 443 ssl;
+    http2 on;
+    server_name _;
+
+    ssl_certificate     /etc/nginx/certs/server.crt;
+    ssl_certificate_key /etc/nginx/certs/server.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+
+    location / {
+        root  /usr/share/nginx/html;
+        index index.html;
+    }
+}
+
+
+openssl req -x509 -nodes -newkey rsa:2048 -days 30 \
+  -keyout certs/server.key -out certs/server.crt \
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
