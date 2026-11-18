@@ -1,0 +1,18 @@
+
+BASE=https://raw.githubusercontent.com/flintsoft-ramkumars/Deployment-Scripts/main/docker-deps
+curl -fsSI "$BASE/Packages.gz" | head -1          # expect HTTP/2 200
+curl -fsSI "$BASE/./Packages.gz" | head -1        # the path apt actually requests; expect 200
+zcat <(curl -fsS "$BASE/Packages.gz") | grep -E '^(Package|Filename):' | head -6
+
+
+echo "deb [trusted=yes] https://raw.githubusercontent.com/flintsoft-ramkumars/Deployment-Scripts/main/docker-deps ./" | \
+  sudo tee /etc/apt/sources.list.d/docker-github.list
+
+sudo apt-get update \
+  -o Dir::Etc::sourcelist=sources.list.d/docker-github.list \
+  -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
+
+sudo apt-get install -y \
+  docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin \
+  docker-ce-rootless-extras uidmap slirp4netns dbus-user-session iptables
